@@ -5,7 +5,6 @@ import {
 } from "@/types/Admin/UserTypes"
 import { api } from "@/utils/api"
 
-// 🔥 TOKEN HELPER
 const getToken = () => {
   if (typeof window === "undefined") return null
 
@@ -15,7 +14,6 @@ const getToken = () => {
   return JSON.parse(userStr)?.accessToken
 }
 
-// USERS LIST
 export const getUsers = async (): Promise<UsersResponse> => {
   const token = getToken()
 
