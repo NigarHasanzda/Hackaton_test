@@ -18,6 +18,7 @@ import {
   Trash2, 
   Eye, 
   ShieldCheck, 
+  ShieldPlus,
   ChevronDown, 
   X, 
   Loader2,
@@ -98,6 +99,7 @@ const RolesPage = () => {
 
   // ================= VIEW ROLE PERMISSIONS (VIEW MODE) =================
   const handleViewPermissionsClick = async (role: Role) => {
+    if (role.name.toLowerCase() === "admin") return
     try {
       setPermissionLoading(true)
       setViewingRoleName(role.name)
@@ -173,6 +175,7 @@ const RolesPage = () => {
 
   // ================= DELETE ROLE =================
   const handleDeleteRole = async (name: string) => {
+    if (name.toLowerCase() === "admin") return
     if (!confirm(`Are you sure you want to delete "${name}" role?`)) return
     try {
       setActionLoading(true)
@@ -376,17 +379,31 @@ const RolesPage = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {/* VIEW PERMISSIONS BUTTON instead of Edit */}
-                          <button onClick={() => handleViewPermissionsClick(r)} disabled={actionLoading} 
-                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-black transition-all" title="View & Manage Permissions">
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          
-                          {/* DELETE ROLE BUTTON */}
-                          <button onClick={() => handleDeleteRole(r.name)} disabled={actionLoading} 
-                            className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-all" title="Delete Role">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {r.name.toLowerCase() === "admin" ? (
+                            <span className="flex items-center gap-1 text-[10px] text-slate-400 italic px-2">
+                              <Lock className="w-3 h-3" /> Protected
+                            </span>
+                          ) : (
+                            <>
+                              {/* VIEW PERMISSIONS BUTTON */}
+                              <button onClick={() => handleViewPermissionsClick(r)} disabled={actionLoading}
+                                className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-black transition-all" title="View Permissions">
+                                <Eye className="w-4 h-4" />
+                              </button>
+
+                              {/* ASSIGN PERMISSIONS BUTTON */}
+                              <button onClick={() => handleViewPermissionsClick(r)} disabled={actionLoading}
+                                className="p-2 hover:bg-amber-50 rounded-lg text-slate-400 hover:text-amber-600 transition-all" title="Assign Permissions">
+                                <ShieldPlus className="w-4 h-4" />
+                              </button>
+
+                              {/* DELETE ROLE BUTTON */}
+                              <button onClick={() => handleDeleteRole(r.name)} disabled={actionLoading}
+                                className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-all" title="Delete Role">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -17,7 +17,8 @@ import {
   Trash2, 
   MoreVertical,
   Search,
-  RefreshCw
+  RefreshCw,
+  Lock
 } from "lucide-react"
 
 const UsersPage = () => {
@@ -137,42 +138,53 @@ const UsersPage = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => handleAction(u.id, () => toggleUserActive(u.id))}
-                          disabled={actionLoading === u.id}
-                          className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all text-slate-600 tooltip"
-                          title="Toggle Status"
-                        >
-                          {u.isActive ? <UserMinus className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                        </button>
+                      {u.roles?.some((r) => r.toLowerCase() === "admin") ? (
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="flex items-center gap-1 text-[11px] text-slate-400 italic px-2">
+                            <Lock className="w-3 h-3" /> Protected
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => handleAction(u.id, () => toggleUserActive(u.id))}
+                            disabled={actionLoading === u.id}
+                            className="p-2 hover:bg-white rounded-lg border border-transparent hover:border-slate-200 transition-all text-slate-600 tooltip"
+                            title="Toggle Status"
+                          >
+                            {u.isActive ? <UserMinus className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                          </button>
 
-                        <button 
-                          onClick={() => handleAction(u.id, () => assignRole({ userId: u.id, roleName: "Admin" }))}
-                          className="p-2 hover:bg-blue-50 rounded-lg border border-transparent hover:border-blue-100 transition-all text-blue-600"
-                          title="Make Admin"
-                        >
-                          <ShieldCheck className="w-4 h-4" />
-                        </button>
+                          <button 
+                            onClick={() => handleAction(u.id, () => assignRole({ userId: u.id, roleName: "Admin" }))}
+                            disabled={actionLoading === u.id}
+                            className="p-2 hover:bg-blue-50 rounded-lg border border-transparent hover:border-blue-100 transition-all text-blue-600"
+                            title="Make Admin"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </button>
 
-                        <button 
-                          onClick={() => handleAction(u.id, () => removeRole({ userId: u.id, roleName: "Admin" }))}
-                          className="p-2 hover:bg-orange-50 rounded-lg border border-transparent hover:border-orange-100 transition-all text-orange-600"
-                          title="Remove Admin"
-                        >
-                          <ShieldAlert className="w-4 h-4" />
-                        </button>
+                          <button 
+                            onClick={() => handleAction(u.id, () => removeRole({ userId: u.id, roleName: "Admin" }))}
+                            disabled={actionLoading === u.id}
+                            className="p-2 hover:bg-orange-50 rounded-lg border border-transparent hover:border-orange-100 transition-all text-orange-600"
+                            title="Remove Admin"
+                          >
+                            <ShieldAlert className="w-4 h-4" />
+                          </button>
 
-                        <div className="w-px h-4 bg-slate-200 mx-1" />
+                          <div className="w-px h-4 bg-slate-200 mx-1" />
 
-                        <button 
-                          onClick={() => handleAction(u.id, () => deleteUser(u.id))}
-                          className="p-2 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-all text-red-600"
-                          title="Delete User"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                          <button 
+                            onClick={() => handleAction(u.id, () => deleteUser(u.id))}
+                            disabled={actionLoading === u.id}
+                            className="p-2 hover:bg-red-50 rounded-lg border border-transparent hover:border-red-100 transition-all text-red-600"
+                            title="Delete User"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

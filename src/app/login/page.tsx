@@ -179,6 +179,17 @@ const Page = () => {
                         {error}
                     </p>
                 )}
+
+                {/* REGISTER REDIRECT */}
+                <p className="text-center text-sm text-slate-500">
+                    Don't have an account?{" "}
+                    <span
+                        onClick={() => router.push("/register")}
+                        className="text-blue-600 cursor-pointer hover:underline font-medium"
+                    >
+                        Register
+                    </span>
+                </p>
             </div>
         </div>
     )
