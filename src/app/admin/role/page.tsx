@@ -1,160 +1,130 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useState, useRef } from "react"
 import {
   getRoles,
   createRole,
+  deleteRole,
+  getAllPermissions,
+  getRolePermissions,
   addPermissionsToRole,
   removePermissionsFromRole,
-  deleteRole,
-  getRolePermissions,
+  PermissionData,
+  RoleItem
 } from "../../../services/AdminServices/RoleService"
-import { Role, CreateRoleRequest } from "../../../types/Admin/Role"
 import { 
   Shield, 
   Plus, 
   Trash2, 
   Eye, 
-  Key, 
+  ShieldCheck, 
+  ChevronDown, 
   X, 
-  Layers, 
   Loader2,
-  FileText 
+  Folder,
+  Lock
 } from "lucide-react"
 
-const RoleManagementPage = () => {
+type Role = {
+  id: string
+  name: string
+}
+
+const RolesPage = () => {
   const [roles, setRoles] = useState<Role[]>([])
+  const [permissionGroups, setPermissionGroups] = useState<PermissionData>({ Products: [], Users: [], Roles: [] })
+  
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
-
-  const [selectedRole, setSelectedRole] = useState("")
-  const [permissionInput, setPermissionInput] = useState("")
+  const [permissionLoading, setPermissionLoading] = useState(false)
+  
+  // View/Manage Permissions Modu üçün state-lər
   const [viewingRoleName, setViewingRoleName] = useState<string | null>(null)
-  const [rolePermissions, setRolePermissions] = useState<string[]>([])
+  const [activeRolePermissions, setActiveRolePermissions] = useState<string[]>([])
 
-  const [formData, setFormData] = useState<CreateRoleRequest>({
-    name: "",
-    description: "",
-    permissions: [],
-  })
+  // Form States
+  const [roleName, setRoleName] = useState("")
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([])
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // =========================
-  // GET ROLES
-  // =========================
-  const fetchRoles = async () => {
+  // ================= DATA FETCHING =================
+  const initPage = async () => {
     try {
       setLoading(true)
-      const res = await getRoles()
-      const data = res?.data ?? res
-      setRoles(Array.isArray(data) ? data : [])
+      const [rolesData, permsData] = await Promise.all([
+        getRoles(),
+        getAllPermissions()
+      ])
+      
+      const rolesList = (rolesData as any)?.items || (rolesData as any)?.data || rolesData || []
+      setRoles(rolesList)
+      setPermissionGroups(permsData)
     } catch (err) {
-      console.error("GET ROLES ERROR:", err)
-      setRoles([])
+      console.error("INIT PAGE ERROR:", err)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchRoles()
+    initPage()
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  // Xüsusi rola aid icazələri yeniləmək üçün köməkçi funksiya
-  const refreshCurrentRolePermissions = async (roleName: string) => {
-    try {
-      const res = await getRolePermissions(roleName)
-      setRolePermissions(res?.data ?? res ?? [])
-    } catch (err) {
-      console.error("REFRESH PERMISSIONS ERROR:", err)
-    }
+  // ================= DROPDOWN TOGGLE PERMISSION =================
+  const handleTogglePermission = (perm: string) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]
+    )
   }
 
-  // =========================
-  // INPUT CHANGE
-  // =========================
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
+  // ================= RESET FORM / BACK TO CREATE =================
+  const resetForm = () => {
+    setRoleName("")
+    setSelectedPermissions([])
+    setViewingRoleName(null)
+    setActiveRolePermissions([])
+    setIsDropdownOpen(false)
   }
 
-  // =========================
-  // CREATE ROLE
-  // =========================
-  const handleCreateRole = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.name.trim()) return
-
+  // ================= VIEW ROLE PERMISSIONS (VIEW MODE) =================
+  const handleViewPermissionsClick = async (role: Role) => {
     try {
-      setActionLoading(true)
-      await createRole(formData)
-      setFormData({ name: "", description: "", permissions: [] })
-      await fetchRoles()
-    } catch (err) {
-      console.error("CREATE ROLE ERROR:", err)
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  // =========================
-  // DELETE ROLE
-  // =========================
-  const handleDeleteRole = async (roleName: string) => {
-    if (!confirm(`Are you sure you want to delete the "${roleName}" role?`)) return
-    try {
-      setActionLoading(true)
-      await deleteRole(roleName)
-      if (viewingRoleName === roleName) {
-        setViewingRoleName(null)
-        setRolePermissions([])
-      }
-      await fetchRoles()
-    } catch (err) {
-      console.error("DELETE ROLE ERROR:", err)
-    } finally {
-      setActionLoading(false)
-    }
-  }
-
-  // =========================
-  // ADD PERMISSION (FIXED REFRESH)
-  // =========================
-  const handleAddPermission = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedRole || !permissionInput.trim()) return
-
-    try {
-      setActionLoading(true)
-      const freshPermission = permissionInput.trim()
-      await addPermissionsToRole(selectedRole, [freshPermission])
+      setPermissionLoading(true)
+      setViewingRoleName(role.name)
+      setSelectedPermissions([]) // dropdown seçimini sıfırlayırıq
       
-      setPermissionInput("")
+      const res = await getRolePermissions(role.name)
+      const rolePerms: string[] = Array.isArray(res) ? res : (res as any)?.items || (res as any)?.data || []
       
-      // Həm ümumi siyahını, həm də aktiv baxış pəncərəsini yeniləyirik
-      await fetchRoles()
-      if (viewingRoleName === selectedRole) {
-        await refreshCurrentRolePermissions(selectedRole)
-      }
+      setActiveRolePermissions(rolePerms)
     } catch (err) {
-      console.error("ADD PERMISSION ERROR:", err)
+      console.error("FETCH ROLE PERMISSIONS ERROR:", err)
     } finally {
-      setActionLoading(false)
+      setPermissionLoading(false)
     }
   }
 
-  // =========================
-  // REMOVE PERMISSION (FIXED REFRESH)
-  // =========================
-  const handleRemovePermission = async (roleName: string, perm: string) => {
+  // ================= SINGLE PERMISSION DELETE FROM ROLE =================
+  const handleDeletePermissionFromRole = async (permToDelete: string) => {
+    if (!viewingRoleName) return
+    if (!confirm(`Are you sure you want to remove "${permToDelete}" permission from this role?`)) return
+
     try {
       setActionLoading(true)
-      await removePermissionsFromRole(roleName, [perm])
+      await removePermissionsFromRole(viewingRoleName, [permToDelete])
       
-      // Avtomatik dataları yenidən çəkirik
-      await fetchRoles()
-      if (viewingRoleName === roleName) {
-        await refreshCurrentRolePermissions(roleName)
-      }
+      // Siyahını dərhal yeniləyirik
+      setActiveRolePermissions((prev) => prev.filter((p) => p !== permToDelete))
     } catch (err) {
       console.error("REMOVE PERMISSION ERROR:", err)
     } finally {
@@ -162,15 +132,57 @@ const RoleManagementPage = () => {
     }
   }
 
-  // =========================
-  // VIEW ROLE PERMISSIONS
-  // =========================
-  const handleViewPermissions = async (roleName: string) => {
+  // ================= SUBMIT (CREATE ROLE OR ADD PERMISSIONS) =================
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
     try {
-      setViewingRoleName(roleName)
-      await refreshCurrentRolePermissions(roleName)
+      setActionLoading(true)
+
+      if (viewingRoleName) {
+        // Mövcud rola yeni seçilən permission-ları əlavə et (POST /api/Roles/{roleName}/permissions)
+        if (selectedPermissions.length > 0) {
+          await addPermissionsToRole(viewingRoleName, selectedPermissions)
+          
+          // Aktiv permission siyahısını yenilə və formu təmizlə
+          setActiveRolePermissions((prev) => [...prev, ...selectedPermissions])
+          setSelectedPermissions([])
+          setIsDropdownOpen(false)
+        }
+      } else {
+        // Tamamilə yeni rol yarat (POST /api/Roles)
+        if (!roleName.trim()) return
+        const currentName = roleName.trim()
+        
+        await createRole({ name: currentName })
+        
+        // Əgər yaradılarkən dropdown-dan permission seçilibsə, onları da göndər
+        if (selectedPermissions.length > 0) {
+          await addPermissionsToRole(currentName, selectedPermissions)
+        }
+        
+        resetForm()
+        await initPage()
+      }
     } catch (err) {
-      console.error("GET PERMISSIONS ERROR:", err)
+      console.error("ROLE SUBMIT ERROR:", err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // ================= DELETE ROLE =================
+  const handleDeleteRole = async (name: string) => {
+    if (!confirm(`Are you sure you want to delete "${name}" role?`)) return
+    try {
+      setActionLoading(true)
+      await deleteRole(name)
+      if (viewingRoleName === name) resetForm()
+      await initPage()
+    } catch (err) {
+      console.error("DELETE ROLE ERROR:", err)
+    } finally {
+      setActionLoading(false)
     }
   }
 
@@ -180,197 +192,214 @@ const RoleManagementPage = () => {
       <div className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Shield className="w-6 h-6 text-black" />
-          RBAC Administration
+          Access Control (Roles)
         </h1>
-        <p className="text-slate-500 text-sm mt-1">Configure system roles and atomic application permissions.</p>
+        <p className="text-slate-500 text-sm mt-1">Create operational roles and manage assigned API permissions dynamically.</p>
       </div>
 
-      {/* Forms Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Create Role Card */}
-        <div className="bg-white p-6 border border-slate-200 rounded-xl shadow-[0_2px_12px_-3px_rgba(0,0,0,0.04)]">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
-            <Layers className="w-4 h-4" /> Create New Role
-          </h2>
-          <form onSubmit={handleCreateRole} className="space-y-3">
-            <input
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="Role Name (e.g., Editor)"
-              className="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-black p-2.5 rounded-lg text-sm outline-none transition-all"
-              required
-            />
-            <input
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              placeholder="Short Description"
-              className="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-black p-2.5 rounded-lg text-sm outline-none transition-all"
-            />
-            <button 
-              disabled={actionLoading || !formData.name.trim()} 
-              type="submit"
-              className="w-full bg-black hover:bg-slate-800 text-white font-medium p-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Create Role
-            </button>
-          </form>
-        </div>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        
+        {/* Dynamic Form / Permissions Management Card */}
+        <div className="xl:col-span-1 bg-white p-6 border border-slate-200 rounded-xl shadow-[0_2px_12px_-3px_rgba(0,0,0,0.04)] h-fit sticky top-8">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              {viewingRoleName ? <Lock className="w-4 h-4 text-amber-500" /> : <Plus className="w-4 h-4" />}
+              {viewingRoleName ? "Manage Role Permissions" : "Create New Role"}
+            </h2>
+            {viewingRoleName && (
+              <button type="button" onClick={resetForm} className="text-xs flex items-center gap-1 text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded-md border border-slate-200 transition-all">
+                <X className="w-3 h-3" /> Back to Create
+              </button>
+            )}
+          </div>
 
-        {/* Assign Permission Card */}
-        <div className="bg-white p-6 border border-slate-200 rounded-xl shadow-[0_2px_12px_-3px_rgba(0,0,0,0.04)]">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-4 flex items-center gap-1.5">
-            <Key className="w-4 h-4" /> Grant Permission to Role
-          </h2>
-          <form onSubmit={handleAddPermission} className="space-y-3">
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-black p-2.5 rounded-lg text-sm outline-none transition-all appearance-none cursor-pointer"
-              required
-            >
-              <option value="">Select Target Role</option>
-              {roles.map((r) => (
-                <option key={r.name} value={r.name}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-
-            <input
-              value={permissionInput}
-              onChange={(e) => setPermissionInput(e.target.value)}
-              placeholder="Permission Name (e.g., users:write)"
-              className="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-black p-2.5 rounded-lg text-sm outline-none transition-all"
-              required
-            />
-
-            <button
-              disabled={actionLoading || !selectedRole || !permissionInput.trim()}
-              type="submit"
-              className="w-full bg-black hover:bg-slate-800 text-white font-medium p-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Assign Permission
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {/* Permissions Detail View */}
-      {viewingRoleName && (
-        <div className="mb-6 bg-slate-50 border border-slate-200 rounded-xl p-5 relative animate-in fade-in duration-200">
-          <button 
-            onClick={() => { setViewingRoleName(null); setRolePermissions([]) }}
-            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-          <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
-            <FileText className="w-4 h-4 text-slate-500" />
-            Permissions for active role: <span className="text-black underline">{viewingRoleName}</span>
-          </h3>
-          {rolePermissions.length === 0 ? (
-            <p className="text-xs text-slate-400 italic">No direct permissions found for this role.</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {rolePermissions.map((p, i) => (
-                <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-md shadow-sm">
-                  {p}
-                  <button 
-                    onClick={() => handleRemovePermission(viewingRoleName, p)}
-                    className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            
+            {/* Conditional input display based on active Mode */}
+            {!viewingRoleName ? (
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-400 uppercase ml-1">Role Name</label>
+                <div className="relative">
+                  <ShieldCheck className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input value={roleName} placeholder="e.g., Manager" onChange={(e) => setRoleName(e.target.value)} required
+                    className="w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-black pl-10 pr-3 py-2.5 rounded-lg text-sm outline-none transition-all" />
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-slate-100 rounded-lg p-3 mb-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-0.5">Active Role</span>
+                <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span> {viewingRoleName}
                 </span>
-              ))}
+                
+                {/* Active Permissions List inside the viewing role */}
+                <div className="mt-3 border-t border-slate-200 pt-3 space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Assigned Permissions:</span>
+                  {permissionLoading ? (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-400 py-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Fetching permissions...
+                    </div>
+                  ) : activeRolePermissions.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic py-1">No permissions assigned yet.</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                      {activeRolePermissions.map((perm) => (
+                        <div key={perm} className="flex items-center justify-between bg-white border border-slate-100 rounded-md pl-2.5 pr-1.5 py-1 text-xs text-slate-700 hover:border-slate-200 transition-colors">
+                          <span className="font-mono text-[11px] text-slate-600 truncate mr-2">{perm}</span>
+                          <button type="button" onClick={() => handleDeletePermissionFromRole(perm)} disabled={actionLoading}
+                            className="p-1 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded transition-colors shrink-0">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* GROUPED MULTI-SELECT DROPDOWN */}
+            <div className="space-y-1 relative" ref={dropdownRef}>
+              <label className="text-[11px] font-bold text-slate-400 uppercase ml-1">
+                {viewingRoleName ? "Grant New Permissions" : "Initial Permissions (Optional)"}
+              </label>
+              
+              <div 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="w-full min-h-[42px] bg-slate-50 ring-1 ring-slate-200 rounded-lg p-2 flex items-center justify-between gap-2 cursor-pointer text-sm hover:ring-slate-300 transition-all"
+              >
+                {selectedPermissions.length === 0 ? (
+                  <span className="text-slate-400 pl-2">Select permissions to add...</span>
+                ) : (
+                  <div className="flex flex-wrap gap-1">
+                    {selectedPermissions.map((p) => (
+                      <span key={p} className="inline-flex items-center gap-1 bg-black text-white text-[11px] font-medium px-2 py-0.5 rounded-md">
+                        {p.split(".").pop()}
+                        <X className="w-3 h-3 cursor-pointer hover:text-red-300" onClick={(e) => { e.stopPropagation(); handleTogglePermission(p) }} />
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform shrink-0 mr-1 ${isDropdownOpen ? "rotate-180" : ""}`} />
+              </div>
+
+              {/* Dropdown Menu Items */}
+              {isDropdownOpen && (
+                <div className="absolute left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-64 overflow-y-auto z-50 p-2 space-y-3">
+                  {Object.entries(permissionGroups).map(([groupName, perms]) => {
+                    // Əgər rol daxilində artıq olan permission-lar varsa onları dropdown-da gizlədə və ya fərqləndirə bilərik
+                    if (!perms || perms.length === 0) return null;
+                    return (
+                      <div key={groupName} className="space-y-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-0.5 bg-slate-50 rounded flex items-center gap-1">
+                          <Folder className="w-3 h-3" /> {groupName}
+                        </div>
+                        
+                        <div className="space-y-0.5 pl-1">
+                          {perms.map((perm: string) => {
+                            // Rolun artıq sahib olduğu permission dropdown-da seçilməsin
+                            const alreadyHas = activeRolePermissions.includes(perm)
+                            const isSelected = selectedPermissions.includes(perm)
+                            
+                            return (
+                              <div
+                                key={perm}
+                                onClick={() => !alreadyHas && handleTogglePermission(perm)}
+                                className={`flex items-center justify-between px-2.5 py-1.5 text-xs rounded-md transition-colors ${
+                                  alreadyHas ? "opacity-40 cursor-not-allowed bg-slate-100 text-slate-400" :
+                                  isSelected ? "bg-slate-950 text-white font-medium cursor-pointer" : "hover:bg-slate-50 text-slate-700 cursor-pointer"
+                                }`}
+                              >
+                                <span className={alreadyHas ? "line-through" : ""}>{perm}</span>
+                                {alreadyHas ? (
+                                  <span className="text-[9px] font-medium text-slate-400 px-1">Assigned</span>
+                                ) : isSelected ? (
+                                  <span className="text-[9px] bg-white/20 text-white px-1 py-0.2 rounded">To Add</span>
+                                ) : null}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <button type="submit" disabled={actionLoading || (viewingRoleName && selectedPermissions.length === 0)}
+              className={`w-full text-white font-medium p-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 mt-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                viewingRoleName ? "bg-amber-600 hover:bg-amber-700" : "bg-black hover:bg-slate-800"
+              }`}>
+              {actionLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : viewingRoleName ? (
+                <Plus className="w-4 h-4" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
+              {viewingRoleName ? "Grant Selected Permissions" : "Create Role"}
+            </button>
+          </form>
+        </div>
+
+        {/* Roles List Table */}
+        <div className="xl:col-span-2 bg-white border border-slate-200 rounded-xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)] overflow-hidden h-fit">
+          {loading ? (
+            <div className="py-24 flex flex-col items-center justify-center gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              <p className="text-slate-400 text-xs font-medium">Fetching roles...</p>
+            </div>
+          ) : roles.length === 0 ? (
+            <div className="py-24 text-center">
+              <p className="text-slate-400 text-sm">No roles registered in the system.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/70 border-b border-slate-100">
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Role Name</th>
+                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right w-28">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {roles.map((r) => (
+                    <tr key={r.id || r.name} className={`hover:bg-slate-50/60 transition-colors group ${viewingRoleName === r.name ? "bg-amber-50/30" : ""}`}>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-md bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs uppercase shrink-0">
+                            {r.name.substring(0, 2)}
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900">{r.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* VIEW PERMISSIONS BUTTON instead of Edit */}
+                          <button onClick={() => handleViewPermissionsClick(r)} disabled={actionLoading} 
+                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-black transition-all" title="View & Manage Permissions">
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          
+                          {/* DELETE ROLE BUTTON */}
+                          <button onClick={() => handleDeleteRole(r.name)} disabled={actionLoading} 
+                            className="p-2 hover:bg-red-50 rounded-lg text-slate-400 hover:text-red-600 transition-all" title="Delete Role">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
-      )}
 
-      {/* Main Roles Table */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-[0_2px_15px_-3px_rgba(0,0,0,0.04)] overflow-hidden">
-        {loading ? (
-          <div className="py-16 flex flex-col items-center justify-center gap-2">
-            <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
-            <p className="text-slate-400 text-xs font-medium">Loading system roles...</p>
-          </div>
-        ) : roles.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-slate-400 text-sm">No roles registered in the system.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50/70 border-b border-slate-100">
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider w-1/4">Role</th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider w-1/3">Description</th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Embedded Permissions</th>
-                  <th className="px-6 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right w-32">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {roles.map((role) => (
-                  <tr key={role.name} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-6 py-4">
-                      <span className="text-sm font-semibold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/60 font-mono">
-                        {role.name}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {role.description || <span className="text-slate-300 italic text-xs">No description provided</span>}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1 max-w-xl">
-                        {role.permissions && role.permissions.length > 0 ? (
-                          role.permissions.map((p, i) => (
-                            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-200 text-slate-600 text-[11px] font-medium rounded">
-                              {p}
-                              <button
-                                onClick={() => handleRemovePermission(role.name, p)}
-                                className="text-slate-400 hover:text-red-500 transition-colors ml-0.5"
-                              >
-                                <X className="w-2.5 h-2.5" />
-                              </button>
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">None</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => handleViewPermissions(role.name)}
-                          className="p-1.5 hover:bg-slate-100 rounded-md border border-transparent hover:border-slate-200 text-slate-600 transition-all"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteRole(role.name)}
-                          className="p-1.5 hover:bg-red-50 rounded-md border border-transparent hover:border-red-100 text-red-600 transition-all"
-                          title="Delete Role"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   )
 }
 
-export default RoleManagementPage
+export default RolesPage
